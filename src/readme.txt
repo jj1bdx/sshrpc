@@ -1,5 +1,6 @@
 sshrpc readme.txt
 by Kenji Rikitake
+kenji.rikitake@acm.org
 25-FEB-2010
 
 This is sshrpc, an experimental module for Erlang RPC over SSH.

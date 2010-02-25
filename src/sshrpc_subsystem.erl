@@ -11,7 +11,7 @@
 %% the License for the specific language governing rights and limitations
 %% under the License.
 
-%% @author Kenji Rikitake
+%% @author Kenji Rikitake <kenji.rikitake@acm.org>
 %% @copyright 2009-2010 Kenji Rikitake
 
 %% @doc general sshrpc server-side subsystem.
