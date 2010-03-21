@@ -18,7 +18,7 @@
 %% TODO: this code must be OTP-nized!
 
 -module(client_test).
--export([startup/0, linkup/0, test/2]).
+-export([startup/0, linkup/0, test/2, test/0]).
 
 -include("sshrpc.hrl").
 
@@ -58,10 +58,17 @@ test(M,N) ->
     {Pid, _Cm} = linkup(),
     Status = lists:map(
 	       fun(X) ->
-		       sshrpc_client:sync_call(Pid, lists, seq, [1, M]),
-		       io:format("NR: ~p Time: ~p~n", [X, erlang:now()]) end,
+		       Reply = sshrpc_client:sync_call(Pid, lists, seq, [1, M]),
+		       io:format("NR: ~p Time: ~p~n", [X, erlang:now()]),
+		       io:format("Reply: ~p~n", [Reply])
+	       end,
 	       lists:seq(1,N)),
     io:format("Time: ~p Status: ~p~n", [erlang:now(),Status]),
     sshrpc_client:stop_channel(Pid).
+
+test() ->
+    startup(),
+    linkup(),
+    test(1,1).
 
 %% end of file
