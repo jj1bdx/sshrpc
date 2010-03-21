@@ -166,6 +166,7 @@ do_handle_call({mfa, {M, F, A}}, From, #state{
 				   cm = ConnectionManager,
 				   channel = ChannelId} = State) ->
     send_command(ConnectionManager, ChannelId, {mfa, {M, F, A}}),
+    %% io:format("do_handle_called with mfa called From = ~p~n", [From]),
     {noreply, State#state{from = From}}.
 
 %%--------------------------------------------------------------------
@@ -265,7 +266,7 @@ open_subsystem(CM, Opts) ->
 
 call(Pid, Msg, TimeOut) ->
     ssh_channel:call(Pid, {{timeout, TimeOut}, Msg}, infinity).
-
+	    
 send_command(Pid, ChannelId, Cmd) ->
     Bin = term_to_binary(Cmd),
     Len = size(Bin),
@@ -284,6 +285,7 @@ handle_reply(State, Data) ->
 
 do_handle_reply(#state{from = From} = State, Reply, Rest) ->
     Msg = binary_to_term(Reply),
+    %% io:format("ssh_channel:reply called with [From, Msg] = [~p, ~p]~n", [From, Msg]),
     ssh_channel:reply(From, Msg),
     handle_reply(State, Rest).
 
