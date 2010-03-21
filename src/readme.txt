@@ -1,7 +1,7 @@
 sshrpc readme.txt
 by Kenji Rikitake
 kenji.rikitake@acm.org
-25-FEB-2010
+21-MAR-2010
 
 This is sshrpc, an experimental module for Erlang RPC over SSH.
 
@@ -22,10 +22,16 @@ subsystem code: sshrpc_subsystem.erl
 * client code
 
 client code is still incomplete and under development.
-client_subsystest.erl is an ad-hoc implementation;
-sshrpc_client.erl will be the ssh_channel based implementation.
 
-* NOTYET: sshrpc_client module functions
+client_test_nonotp.erl: an ad-hoc implementation without OTP;
+sshrpc_client.erl: OTP ssh_channel based client code implementation,
+client_test.erl: example code using sshrpc_client.erl.
+
+NOTE: R13B04 ssh_connection:send/4 has an argument parsing bug
+      to treat the Timeout 'infinity' atom as a Data and
+      crashes when trying to erlang:size([infinity]).
+
+* sshrpc_client module functions (still experimental)
 
 sync_call(Pid, Module, Function, Arguments) -> result | {badrpc, Reason}
     synchronous function evaluation on the remote node

@@ -269,9 +269,13 @@ call(Pid, Msg, TimeOut) ->
 send_command(Pid, ChannelId, Cmd) ->
     Bin = term_to_binary(Cmd),
     Len = size(Bin),
+    %% R13B04 ssh_connection:send/4 has a bug:
+    %% if the send(ConnectionRef, ChannelId, Data, Timeout)'s
+    %% Timeout = 'infinity' (an atom), this is interpreted as a Data in
+    %% send(ConnectionRef, ChannelId, Type, Data); 
+    %% the atom 'infinity' removed for disambiguation and a workaround
     ssh_connection:send(Pid, ChannelId, 
-			<<?UINT32(Len), Bin/binary>>,
-			infinity).
+			<<?UINT32(Len), Bin/binary>>).
 
 handle_reply(State, <<?UINT32(Len),Reply:Len/binary,Rest/binary>>) ->
     do_handle_reply(State, Reply, Rest);

@@ -25,7 +25,7 @@
 %% (put id_rsa.pub, ssh_host_rsa_key{.pub}, and authorized_keys
 
 -define(SERVER_CONFIG,
-	"/your/server/directory").
+	"/your/server_config").
 
 startup() ->
     ok = crypto:start(),

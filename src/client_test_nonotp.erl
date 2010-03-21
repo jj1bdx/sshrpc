@@ -17,7 +17,7 @@
 %% @doc example code for testing SSH RPC client site
 %% TODO: this code must be OTP-nized!
 
--module(client_subsystest).
+-module(client_test_nonotp).
 -export([startup/0, linkup/0, doit/2, test/2]).
 
 -include("sshrpc.hrl").
@@ -27,7 +27,7 @@
 %% specifyclient configuration key directory
 %% (put id_rsa and id_rsa.pub)
 
--define(CLIENT_CONFIG, "/your/client/directory").
+-define(CLIENT_CONFIG, "/your/client_config").
 
 startup() ->
     ok = crypto:start(),

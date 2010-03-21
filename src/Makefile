@@ -23,7 +23,8 @@
 
 ERL = erl -boot start_clean 
 
-MODS = sshrpc_subsystem server_test client_subsystest
+MODS = sshrpc_subsystem server_test client_test_nonotp \
+	sshrpc_client client_test
 
 all: compile
 
