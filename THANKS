@@ -1,9 +1,17 @@
 Thanks to the following individuals for helping this project:
+-------------------------------------------------------------
 
-Dave Smith (at dizzyd.com, especially for his SDIST paper)
-Francesco Cesarini at Erlang Solutions
-Ulf Wiger at Erlang Solutions
+* Dave Smith (at dizzyd.com, especially for his SDIST paper)
+* Francesco Cesarini at Erlang Solutions
+* Ulf Wiger at Erlang Solutions
 
-And thanks to the organizational support for this project:
+Thanks to the organizational support for this project:
+------------------------------------------------------
 
-NSIRG, NICT, Japan
+* Erlang Solutions, Inc.
+  for allowing putting my Erlang Factory slides
+  as a part of this distribution
+
+* NSIRG, NICT, Japan
+
+
