@@ -1,0 +1,10 @@
+{application, sshrpc, [
+    {description, "SSH RPC for Erlang"},
+    {vsn, "0.0.1"},
+    {env, []},
+    {registered, []},
+    {modules, [client_test, client_test_nonotp,
+               server_test,
+               sshrpc_client, sshrpc_subsystem]},
+    {applications, [kernel, stdlib]}
+]}.
