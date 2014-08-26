@@ -40,6 +40,8 @@
 %% subsystem name conforms the private method and algorithm
 %% convention on RFC4251 Section 6.
 
+-spec subsystem_spec(term()) -> {string(), {term(), term()}}.
+
 subsystem_spec(Options) ->
         {"sshrpc@k2r.org", {?MODULE, Options}}.
 
@@ -52,6 +54,9 @@ subsystem_spec(Options) ->
 %%                        
 %% Description: Initiates the CLI
 %%--------------------------------------------------------------------
+
+-spec init(term()) -> {ok, #state{}}.
+
 init(_Options) ->
     {ok, #state{pending = <<>>}}.
 
