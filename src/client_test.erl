@@ -29,9 +29,13 @@
 
 -define(CLIENT_CONFIG, "/your/client_config").
 
+-spec startup() -> ok.
+
 startup() ->
     ok = crypto:start(),
     ok = ssh:start().
+
+-spec linkup() -> {pid(), term()}.
 
 linkup() ->
     {ok, Pid, Cm} = sshrpc_client:start_channel("127.0.0.1", % server address
@@ -54,6 +58,8 @@ linkup() ->
     io:format("Pid: ~p Cm: ~p ~n", [Pid, Cm]),
     {Pid, Cm}.
 
+-spec test(non_neg_integer(), non_neg_integer()) -> ok.
+
 test(M,N) ->
     {Pid, _Cm} = linkup(),
     Status = lists:map(
@@ -65,6 +71,8 @@ test(M,N) ->
 	       lists:seq(1,N)),
     io:format("Time: ~p Status: ~p~n", [erlang:now(),Status]),
     sshrpc_client:stop_channel(Pid).
+
+-spec test() -> ok.
 
 test() ->
     startup(),
