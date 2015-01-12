@@ -135,6 +135,8 @@ define dep_fetch
 	elif [ "$$$$VS" = "hg" ]; then \
 		hg clone -U $$$$REPO $(DEPS_DIR)/$(1); \
 		cd $(DEPS_DIR)/$(1) && hg update -q $$$$COMMIT; \
+	elif [ "$$$$VS" = "svn" ]; then \
+		svn checkout $$$$REPO $(DEPS_DIR)/$(1); \
 	else \
 		echo "Unknown or invalid dependency: $(1). Please consult the erlang.mk README for instructions." >&2; \
 		exit 78; \
@@ -296,6 +298,334 @@ erlc-include:
 clean-app:
 	$(gen_verbose) rm -rf ebin/ priv/mibs/ \
 		$(addprefix include/,$(addsuffix .hrl,$(notdir $(basename $(wildcard mibs/*.mib)))))
+
+# Copyright (c) 2014, Loïc Hoguin <essen@ninenines.eu>
+# This file is part of erlang.mk and subject to the terms of the ISC License.
+
+.PHONY: bootstrap bootstrap-lib bootstrap-rel new list-templates
+
+# Core targets.
+
+help::
+	@printf "%s\n" "" \
+		"Bootstrap targets:" \
+		"  bootstrap          Generate a skeleton of an OTP application" \
+		"  bootstrap-lib      Generate a skeleton of an OTP library" \
+		"  bootstrap-rel      Generate the files needed to build a release" \
+		"  new t=TPL n=NAME   Generate a module NAME based on the template TPL" \
+		"  list-templates     List available templates"
+
+# Bootstrap templates.
+
+bs_appsrc = "{application, $(PROJECT), [" \
+	"	{description, \"\"}," \
+	"	{vsn, \"0.1.0\"}," \
+	"	{id, \"git\"}," \
+	"	{modules, []}," \
+	"	{registered, []}," \
+	"	{applications, [" \
+	"		kernel," \
+	"		stdlib" \
+	"	]}," \
+	"	{mod, {$(PROJECT)_app, []}}," \
+	"	{env, []}" \
+	"]}."
+bs_appsrc_lib = "{application, $(PROJECT), [" \
+	"	{description, \"\"}," \
+	"	{vsn, \"0.1.0\"}," \
+	"	{id, \"git\"}," \
+	"	{modules, []}," \
+	"	{registered, []}," \
+	"	{applications, [" \
+	"		kernel," \
+	"		stdlib" \
+	"	]}" \
+	"]}."
+bs_Makefile = "PROJECT = $(PROJECT)" \
+	"include erlang.mk"
+bs_app = "-module($(PROJECT)_app)." \
+	"-behaviour(application)." \
+	"" \
+	"-export([start/2])." \
+	"-export([stop/1])." \
+	"" \
+	"start(_Type, _Args) ->" \
+	"	$(PROJECT)_sup:start_link()." \
+	"" \
+	"stop(_State) ->" \
+	"	ok."
+bs_relx_config = "{release, {$(PROJECT)_release, \"1\"}, [$(PROJECT)]}." \
+	"{extended_start_script, true}." \
+	"{sys_config, \"rel/sys.config\"}." \
+	"{vm_args, \"rel/vm.args\"}."
+bs_sys_config = "[" \
+	"]."
+bs_vm_args = "-name $(PROJECT)@127.0.0.1" \
+	"-setcookie $(PROJECT)" \
+	"-heart"
+# Normal templates.
+tpl_supervisor = "-module($(n))." \
+	"-behaviour(supervisor)." \
+	"" \
+	"-export([start_link/0])." \
+	"-export([init/1])." \
+	"" \
+	"start_link() ->" \
+	"	supervisor:start_link({local, ?MODULE}, ?MODULE, [])." \
+	"" \
+	"init([]) ->" \
+	"	Procs = []," \
+	"	{ok, {{one_for_one, 1, 5}, Procs}}."
+tpl_gen_server = "-module($(n))." \
+	"-behaviour(gen_server)." \
+	"" \
+	"%% API." \
+	"-export([start_link/0])." \
+	"" \
+	"%% gen_server." \
+	"-export([init/1])." \
+	"-export([handle_call/3])." \
+	"-export([handle_cast/2])." \
+	"-export([handle_info/2])." \
+	"-export([terminate/2])." \
+	"-export([code_change/3])." \
+	"" \
+	"-record(state, {" \
+	"})." \
+	"" \
+	"%% API." \
+	"" \
+	"-spec start_link() -> {ok, pid()}." \
+	"start_link() ->" \
+	"	gen_server:start_link(?MODULE, [], [])." \
+	"" \
+	"%% gen_server." \
+	"" \
+	"init([]) ->" \
+	"	{ok, \#state{}}." \
+	"" \
+	"handle_call(_Request, _From, State) ->" \
+	"	{reply, ignored, State}." \
+	"" \
+	"handle_cast(_Msg, State) ->" \
+	"	{noreply, State}." \
+	"" \
+	"handle_info(_Info, State) ->" \
+	"	{noreply, State}." \
+	"" \
+	"terminate(_Reason, _State) ->" \
+	"	ok." \
+	"" \
+	"code_change(_OldVsn, State, _Extra) ->" \
+	"	{ok, State}."
+tpl_gen_fsm = "-module($(n))." \
+	"-behaviour(gen_fsm)." \
+	"" \
+	"%% API." \
+	"-export([start_link/0])." \
+	"" \
+	"%% gen_fsm." \
+	"-export([init/1])." \
+	"-export([state_name/2])." \
+	"-export([handle_event/3])." \
+	"-export([state_name/3])." \
+	"-export([handle_sync_event/4])." \
+	"-export([handle_info/3])." \
+	"-export([terminate/3])." \
+	"-export([code_change/4])." \
+	"" \
+	"-record(state, {" \
+	"})." \
+	"" \
+	"%% API." \
+	"" \
+	"-spec start_link() -> {ok, pid()}." \
+	"start_link() ->" \
+	"	gen_fsm:start_link(?MODULE, [], [])." \
+	"" \
+	"%% gen_fsm." \
+	"" \
+	"init([]) ->" \
+	"	{ok, state_name, \#state{}}." \
+	"" \
+	"state_name(_Event, StateData) ->" \
+	"	{next_state, state_name, StateData}." \
+	"" \
+	"handle_event(_Event, StateName, StateData) ->" \
+	"	{next_state, StateName, StateData}." \
+	"" \
+	"state_name(_Event, _From, StateData) ->" \
+	"	{reply, ignored, state_name, StateData}." \
+	"" \
+	"handle_sync_event(_Event, _From, StateName, StateData) ->" \
+	"	{reply, ignored, StateName, StateData}." \
+	"" \
+	"handle_info(_Info, StateName, StateData) ->" \
+	"	{next_state, StateName, StateData}." \
+	"" \
+	"terminate(_Reason, _StateName, _StateData) ->" \
+	"	ok." \
+	"" \
+	"code_change(_OldVsn, StateName, StateData, _Extra) ->" \
+	"	{ok, StateName, StateData}."
+tpl_cowboy_http = "-module($(n))." \
+	"-behaviour(cowboy_http_handler)." \
+	"" \
+	"-export([init/3])." \
+	"-export([handle/2])." \
+	"-export([terminate/3])." \
+	"" \
+	"-record(state, {" \
+	"})." \
+	"" \
+	"init(_, Req, _Opts) ->" \
+	"	{ok, Req, \#state{}}." \
+	"" \
+	"handle(Req, State=\#state{}) ->" \
+	"	{ok, Req2} = cowboy_req:reply(200, Req)," \
+	"	{ok, Req2, State}." \
+	"" \
+	"terminate(_Reason, _Req, _State) ->" \
+	"	ok."
+tpl_cowboy_loop = "-module($(n))." \
+	"-behaviour(cowboy_loop_handler)." \
+	"" \
+	"-export([init/3])." \
+	"-export([info/3])." \
+	"-export([terminate/3])." \
+	"" \
+	"-record(state, {" \
+	"})." \
+	"" \
+	"init(_, Req, _Opts) ->" \
+	"	{loop, Req, \#state{}, 5000, hibernate}." \
+	"" \
+	"info(_Info, Req, State) ->" \
+	"	{loop, Req, State, hibernate}." \
+	"" \
+	"terminate(_Reason, _Req, _State) ->" \
+	"	ok."
+tpl_cowboy_rest = "-module($(n))." \
+	"" \
+	"-export([init/3])." \
+	"-export([content_types_provided/2])." \
+	"-export([get_html/2])." \
+	"" \
+	"init(_, _Req, _Opts) ->" \
+	"	{upgrade, protocol, cowboy_rest}." \
+	"" \
+	"content_types_provided(Req, State) ->" \
+	"	{[{{<<\"text\">>, <<\"html\">>, '*'}, get_html}], Req, State}." \
+	"" \
+	"get_html(Req, State) ->" \
+	"	{<<\"<html><body>This is REST!</body></html>\">>, Req, State}."
+tpl_cowboy_ws = "-module($(n))." \
+	"-behaviour(cowboy_websocket_handler)." \
+	"" \
+	"-export([init/3])." \
+	"-export([websocket_init/3])." \
+	"-export([websocket_handle/3])." \
+	"-export([websocket_info/3])." \
+	"-export([websocket_terminate/3])." \
+	"" \
+	"-record(state, {" \
+	"})." \
+	"" \
+	"init(_, _, _) ->" \
+	"	{upgrade, protocol, cowboy_websocket}." \
+	"" \
+	"websocket_init(_, Req, _Opts) ->" \
+	"	Req2 = cowboy_req:compact(Req)," \
+	"	{ok, Req2, \#state{}}." \
+	"" \
+	"websocket_handle({text, Data}, Req, State) ->" \
+	"	{reply, {text, Data}, Req, State};" \
+	"websocket_handle({binary, Data}, Req, State) ->" \
+	"	{reply, {binary, Data}, Req, State};" \
+	"websocket_handle(_Frame, Req, State) ->" \
+	"	{ok, Req, State}." \
+	"" \
+	"websocket_info(_Info, Req, State) ->" \
+	"	{ok, Req, State}." \
+	"" \
+	"websocket_terminate(_Reason, _Req, _State) ->" \
+	"	ok."
+tpl_ranch_protocol = "-module($(n))." \
+	"-behaviour(ranch_protocol)." \
+	"" \
+	"-export([start_link/4])." \
+	"-export([init/4])." \
+	"" \
+	"-type opts() :: []." \
+	"-export_type([opts/0])." \
+	"" \
+	"-record(state, {" \
+	"	socket :: inet:socket()," \
+	"	transport :: module()" \
+	"})." \
+	"" \
+	"start_link(Ref, Socket, Transport, Opts) ->" \
+	"	Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts])," \
+	"	{ok, Pid}." \
+	"" \
+	"-spec init(ranch:ref(), inet:socket(), module(), opts()) -> ok." \
+	"init(Ref, Socket, Transport, _Opts) ->" \
+	"	ok = ranch:accept_ack(Ref)," \
+	"	loop(\#state{socket=Socket, transport=Transport})." \
+	"" \
+	"loop(State) ->" \
+	"	loop(State)."
+
+# Plugin-specific targets.
+
+bootstrap:
+ifneq ($(wildcard src/),)
+	$(error Error: src/ directory already exists)
+endif
+	@printf "%s\n" $(bs_Makefile) > Makefile
+	@mkdir src/
+	@printf "%s\n" $(bs_appsrc) > src/$(PROJECT).app.src
+	@printf "%s\n" $(bs_app) > src/$(PROJECT)_app.erl
+	$(eval n := $(PROJECT)_sup)
+	@printf "%s\n" $(tpl_supervisor) > src/$(PROJECT)_sup.erl
+
+bootstrap-lib:
+ifneq ($(wildcard src/),)
+	$(error Error: src/ directory already exists)
+endif
+	@printf "%s\n" $(bs_Makefile) > Makefile
+	@mkdir src/
+	@printf "%s\n" $(bs_appsrc_lib) > src/$(PROJECT).app.src
+
+bootstrap-rel:
+ifneq ($(wildcard relx.config),)
+	$(error Error: relx.config already exists)
+endif
+ifneq ($(wildcard rel/),)
+	$(error Error: rel/ directory already exists)
+endif
+	@printf "%s\n" $(bs_relx_config) > relx.config
+	@mkdir rel/
+	@printf "%s\n" $(bs_sys_config) > rel/sys.config
+	@printf "%s\n" $(bs_vm_args) > rel/vm.args
+
+new:
+ifeq ($(wildcard src/),)
+	$(error Error: src/ directory does not exist)
+endif
+ifndef t
+	$(error Usage: make new t=TEMPLATE n=NAME)
+endif
+ifndef tpl_$(t)
+	$(error Unknown template)
+endif
+ifndef n
+	$(error Usage: make new t=TEMPLATE n=NAME)
+endif
+	@printf "%s\n" $(tpl_$(t)) > src/$(n).erl
+
+list-templates:
+	@echo Available templates: $(sort $(patsubst tpl_%,%,$(filter tpl_%,$(.VARIABLES))))
 
 # Copyright (c) 2014, Loïc Hoguin <essen@ninenines.eu>
 # This file is part of erlang.mk and subject to the terms of the ISC License.
@@ -544,3 +874,218 @@ distclean:: distclean-edoc
 
 distclean-edoc:
 	$(gen_verbose) rm -f doc/*.css doc/*.html doc/*.png doc/edoc-info
+
+# Copyright (c) 2014, Juan Facorro <juan@inaka.net>
+# This file is part of erlang.mk and subject to the terms of the ISC License.
+
+.PHONY: elvis distclean-elvis
+
+# Configuration.
+
+ELVIS_CONFIG ?= $(CURDIR)/elvis.config
+
+ELVIS ?= $(CURDIR)/elvis
+export ELVIS
+
+ELVIS_URL ?= https://github.com/inaka/elvis/releases/download/0.2.3/elvis
+ELVIS_CONFIG_URL ?= https://github.com/inaka/elvis/releases/download/0.2.3/elvis.config
+ELVIS_OPTS ?=
+
+# Core targets.
+
+help::
+	@printf "%s\n" "" \
+		"Elvis targets:" \
+		"  elvis       Run Elvis using the local elvis.config or download the default otherwise"
+
+ifneq ($(wildcard $(ELVIS_CONFIG)),)
+rel:: distclean-elvis
+endif
+
+distclean:: distclean-elvis
+
+# Plugin-specific targets.
+
+$(ELVIS):
+	@$(call core_http_get,$(ELVIS_CONFIG),$(ELVIS_CONFIG_URL))
+	@$(call core_http_get,$(ELVIS),$(ELVIS_URL))
+	@chmod +x $(ELVIS)
+
+elvis: $(ELVIS)
+	@$(ELVIS) rock -c $(ELVIS_CONFIG) $(ELVIS_OPTS)
+
+distclean-elvis:
+	$(gen_verbose) rm -rf $(ELVIS)
+
+# Copyright (c) 2013-2014, Loïc Hoguin <essen@ninenines.eu>
+# This file is part of erlang.mk and subject to the terms of the ISC License.
+
+# Configuration.
+
+DTL_FULL_PATH ?= 0
+
+# Verbosity.
+
+dtl_verbose_0 = @echo " DTL   " $(filter %.dtl,$(?F));
+dtl_verbose = $(dtl_verbose_$(V))
+
+# Core targets.
+
+define compile_erlydtl
+	$(dtl_verbose) erl -noshell -pa ebin/ $(DEPS_DIR)/erlydtl/ebin/ -eval ' \
+		Compile = fun(F) -> \
+			S = fun (1) -> re:replace(filename:rootname(string:sub_string(F, 11), ".dtl"), "/",  "_",  [{return, list}, global]); \
+				(0) -> filename:basename(F, ".dtl") \
+			end, \
+			Module = list_to_atom(string:to_lower(S($(DTL_FULL_PATH))) ++ "_dtl"), \
+			{ok, _} = erlydtl:compile(F, Module, [{out_dir, "ebin/"}, return_errors, {doc_root, "templates"}]) \
+		end, \
+		_ = [Compile(F) || F <- string:tokens("$(1)", " ")], \
+		init:stop()'
+endef
+
+ifneq ($(wildcard src/),)
+ebin/$(PROJECT).app:: $(shell find templates -type f -name \*.dtl 2>/dev/null)
+	$(if $(strip $?),$(call compile_erlydtl,$?))
+endif
+
+# Copyright (c) 2014 Dave Cottlehuber <dch@skunkwerks.at>
+# This file is part of erlang.mk and subject to the terms of the ISC License.
+
+.PHONY: distclean-escript escript
+
+# Configuration.
+
+ESCRIPT_NAME ?= $(PROJECT)
+ESCRIPT_COMMENT ?= This is an -*- erlang -*- file
+
+ESCRIPT_BEAMS ?= "ebin/*", "deps/*/ebin/*"
+ESCRIPT_SYS_CONFIG ?= "rel/sys.config"
+ESCRIPT_EMU_ARGS ?= -pa . \
+	-noshell -noinput  \
+	-sasl errlog_type error \
+	-escript main $(ESCRIPT_NAME)
+ESCRIPT_SHEBANG ?= /usr/bin/env escript
+ESCRIPT_STATIC ?= "deps/*/priv/**", "priv/**"
+
+# Core targets.
+
+distclean:: distclean-escript
+
+help::
+	@printf "%s\n" "" \
+		"Escript targets:" \
+		"  escript     Build an executable escript archive" \
+
+# Plugin-specific targets.
+
+# Based on https://github.com/synrc/mad/blob/master/src/mad_bundle.erl
+# Copyright (c) 2013 Maxim Sokhatsky, Synrc Research Center
+# Modified MIT License, https://github.com/synrc/mad/blob/master/LICENSE :
+# Software may only be used for the great good and the true happiness of all
+# sentient beings.
+define ESCRIPT_RAW
+'Read = fun(F) -> {ok, B} = file:read_file(filename:absname(F)), B end,'\
+'Files = fun(L) -> A = lists:concat([filelib:wildcard(X)||X<- L ]),'\
+'  [F || F <- A, not filelib:is_dir(F) ] end,'\
+'Squash = fun(L) -> [{filename:basename(F), Read(F) } || F <- L ] end,'\
+'Zip = fun(A, L) -> {ok,{_,Z}} = zip:create(A, L, [{compress,all},memory]), Z end,'\
+'Ez = fun(Escript) ->'\
+'  Static = Files([$(ESCRIPT_STATIC)]),'\
+'  Beams = Squash(Files([$(ESCRIPT_BEAMS), $(ESCRIPT_SYS_CONFIG)])),'\
+'  Archive = Beams ++ [{ "static.gz", Zip("static.gz", Static)}],'\
+'  escript:create(Escript, [ $(ESCRIPT_OPTIONS)'\
+'    {archive, Archive, [memory]},'\
+'    {shebang, "$(ESCRIPT_SHEBANG)"},'\
+'    {comment, "$(ESCRIPT_COMMENT)"},'\
+'    {emu_args, " $(ESCRIPT_EMU_ARGS)"}'\
+'  ]),'\
+'  file:change_mode(Escript, 8#755)'\
+'end,'\
+'Ez("$(ESCRIPT_NAME)").'
+endef
+ESCRIPT_COMMAND = $(subst ' ',,$(ESCRIPT_RAW))
+
+escript:: distclean-escript deps app
+	$(gen_verbose) erl -noshell -eval $(ESCRIPT_COMMAND) -s init stop
+
+distclean-escript:
+	$(gen_verbose) rm -f $(ESCRIPT_NAME)
+
+# Copyright (c) 2013-2014, Loïc Hoguin <essen@ninenines.eu>
+# This file is part of erlang.mk and subject to the terms of the ISC License.
+
+.PHONY: relx-rel distclean-relx-rel distclean-relx
+
+# Configuration.
+
+RELX_CONFIG ?= $(CURDIR)/relx.config
+
+RELX ?= $(CURDIR)/relx
+export RELX
+
+RELX_URL ?= https://github.com/erlware/relx/releases/download/v1.1.0/relx
+RELX_OPTS ?=
+RELX_OUTPUT_DIR ?= _rel
+
+ifeq ($(firstword $(RELX_OPTS)),-o)
+	RELX_OUTPUT_DIR = $(word 2,$(RELX_OPTS))
+else
+	RELX_OPTS += -o $(RELX_OUTPUT_DIR)
+endif
+
+# Core targets.
+
+ifneq ($(wildcard $(RELX_CONFIG)),)
+rel:: distclean-relx-rel relx-rel
+endif
+
+distclean:: distclean-relx-rel distclean-relx
+
+# Plugin-specific targets.
+
+define relx_fetch
+	$(call core_http_get,$(RELX),$(RELX_URL))
+	chmod +x $(RELX)
+endef
+
+$(RELX):
+	@$(call relx_fetch)
+
+relx-rel: $(RELX)
+	@$(RELX) -c $(RELX_CONFIG) $(RELX_OPTS)
+
+distclean-relx-rel:
+	$(gen_verbose) rm -rf $(RELX_OUTPUT_DIR)
+
+distclean-relx:
+	$(gen_verbose) rm -rf $(RELX)
+
+# Copyright (c) 2014, M Robert Martin <rob@version2beta.com>
+# This file is contributed to erlang.mk and subject to the terms of the ISC License.
+
+.PHONY: shell
+
+# Configuration.
+
+SHELL_PATH ?= -pa $(CURDIR)/ebin $(DEPS_DIR)/*/ebin
+SHELL_OPTS ?=
+
+ALL_SHELL_DEPS_DIRS = $(addprefix $(DEPS_DIR)/,$(SHELL_DEPS))
+
+# Core targets
+
+help::
+	@printf "%s\n" "" \
+		"Shell targets:" \
+		"  shell              Run an erlang shell with SHELL_OPTS or reasonable default"
+
+# Plugin-specific targets.
+
+$(foreach dep,$(SHELL_DEPS),$(eval $(call dep_target,$(dep))))
+
+build-shell-deps: $(ALL_SHELL_DEPS_DIRS)
+	@for dep in $(ALL_SHELL_DEPS_DIRS) ; do $(MAKE) -C $$dep ; done
+
+shell: build-shell-deps
+	$(gen_verbose) erl $(SHELL_PATH) $(SHELL_OPTS)
